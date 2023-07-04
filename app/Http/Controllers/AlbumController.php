@@ -137,12 +137,12 @@ class AlbumController extends Controller
             // $imageName = date('Ymd') . $imageHash . '.' . $request->file('image')->getClientOriginalExtension();
             $imageName = date('Ymd') . '_' . Str::random(10) . '.' . $request->file('image')->getClientOriginalExtension();
 
-            $request->file('image')->move(public_path('upload/' . date('Y', strtotime($album->created_at)) . '/' . date('m', strtotime($album->created_at)) . '/' . date('d', strtotime($album->created_at))), $imageName);
+            $request->file('image')->move(public_path('upload/' . date('Y') . '/' . date('m') . '/' . date('d')), $imageName);
             $album->image = $imageName;
         }
 
         $album->save();
-        $imagePath = $album->image ? 'upload/' . date('Y', strtotime($album->created_at)) . '/' . date('m', strtotime($album->created_at)) . '/' . date('d', strtotime($album->created_at)) . '/' . $album->image : null;
+        $imagePath = $album->image ? 'upload/' . date('Y', strtotime($album->update_at)) . '/' . date('m', strtotime($album->update_at)) . '/' . date('d', strtotime($album->update_at)) . '/' . $album->image : null;
         $imageUrl = $imagePath ? url($imagePath) : null;
 
         $response = [
