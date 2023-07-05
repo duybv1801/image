@@ -35,7 +35,7 @@ class AlbumController extends Controller
     private function generateImagePath($album, $timestamp = null)
     {
         $timestamp = $timestamp ?: $album->updated_at;
-        return 'upload/' . date('Y/m/d/', strtotime($timestamp)) . $album->image;
+        return 'public/upload/' . date('Y/m/d/', strtotime($timestamp)) . $album->image;
     }
 
     private function generateImageName($extension)
@@ -67,13 +67,13 @@ class AlbumController extends Controller
         $album = new Album();
         if ($image) {
             $imageName = $this->generateImageName($image->extension());
-            $image->move(public_path('upload/' . date('Y/m/d')), $imageName);
+            $imagePath = $image->storeAs('public/upload/' . date('Y/m/d'), $imageName);
             $album->image = $imageName;
         }
 
         $album->save();
-        $imagePath = $this->generateImagePath($album);
-        $imageUrl = asset($imagePath);
+        $imageUrl = Storage::url($imagePath);
+
 
 
         $response = [
@@ -144,21 +144,22 @@ class AlbumController extends Controller
 
         if ($image) {
             if ($album->image) {
-                $imagePath = public_path($this->generateImagePath($album));
-                if (file_exists($imagePath)) {
-                    unlink($imagePath);
+                $imagePath = $this->generateImagePath($album);
+                if (Storage::exists($imagePath)) {
+                    Storage::delete($imagePath);
                 }
             }
 
             $imageName = $this->generateImageName($image->extension());
 
-            $image->move(public_path('upload/' . date('Y/m/d/')), $imageName);
+            $imagePath = $image->storeAs('public/upload/' . date('Y/m/d'), $imageName);
+
             $album->image = $imageName;
         }
 
         $album->save();
-        $imagePath = $this->generateImagePath($album);
-        $imageUrl = url($imagePath);
+        $imageUrl = Storage::url($imagePath);
+
 
         $response = [
             'message' => 'album updated successfully',
@@ -183,8 +184,8 @@ class AlbumController extends Controller
 
         if ($album->image) {
             $imagePath = $this->generateImagePath($album);
-            if (file_exists($imagePath)) {
-                unlink($imagePath);
+            if (Storage::exists($imagePath)) {
+                Storage::delete($imagePath);
             }
         }
 
