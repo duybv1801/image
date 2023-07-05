@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+
 
 use App\Models\Album;
 
@@ -21,14 +23,24 @@ class AlbumController extends Controller
         return response()->json(['albums' => $albums]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
+
+    //Validation
+    private function validateAlbum(Request $request)
     {
-        //
+        return Validator::make($request->all(), [
+            'image' => 'image|mimes:png,jpg,svg|max:10240',
+        ]);
+    }
+
+    private function generateImagePath($album, $timestamp = null)
+    {
+        $timestamp = $timestamp ?: $album->updated_at;
+        return 'upload/' . date('Y/m/d/', strtotime($timestamp)) . $album->image;
+    }
+
+    private function generateImageName($extension)
+    {
+        return date('Ymd') . '_' . Str::random(10) . '.' . $extension;
     }
 
     /**
@@ -39,26 +51,30 @@ class AlbumController extends Controller
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'image' => 'required|image|mimes:png,jpg,svg|max:10240',
-        ]);
+        $validator = $this->validateAlbum($request);
+        $image = $request->image;
 
         if ($validator->fails()) {
-            return response()->json(['message' => 'Image validation failed', 'errors' => $validator->errors()], 400);
+            return response()->json(
+                [
+                    'message' => 'Image validation failed',
+                    'errors' => $validator->errors()
+                ],
+                400
+            );
         }
 
         $album = new Album();
-        if ($request->hasFile('image')) {
-            // $imageHash = substr(md5(uniqid()), 0, 2);
-            // $imageName = date('Ymd') . $imageHash . '.' . $request->file('image')->getClientOriginalExtension();
-            $imageName = date('Ymd') . '_' . Str::random(10) . '.' . $request->file('image')->getClientOriginalExtension();
-            $request->image->move(public_path('upload/' . date('Y') . '/' . date('m') . '/' . date('d')), $imageName);
+        if ($image) {
+            $imageName = $this->generateImageName($image->extension());
+            $image->move(public_path('upload/' . date('Y/m/d')), $imageName);
             $album->image = $imageName;
         }
 
         $album->save();
-        $imagePath = 'upload/' . date('Y') . '/' . date('m') . '/' . date('d') . '/' . $imageName;
-        $imageUrl = url($imagePath);
+        $imagePath = $this->generateImagePath($album);
+        $imageUrl = asset($imagePath);
+
 
         $response = [
             'message' => 'Album created successfully',
@@ -79,21 +95,17 @@ class AlbumController extends Controller
     public function show($id)
     {
         $album = Album::findOrFail($id);
-        $imagePath = $album->image ? 'upload/' . date('Y', strtotime($album->created_at)) . '/' . date('m', strtotime($album->created_at)) . '/' . date('d', strtotime($album->created_at)) . '/' . $album->image : null;
+        $imagePath = $album->image ? $this->generateImagePath($album) : null;
         $imageUrl = $imagePath ? url($imagePath) : null;
         $response = [
-            'album' => [
-                'id' => $album->id,
-                'image_path' => $imagePath,
-                'image_url' => $imageUrl,
-                'image_name' => $album->image,
-                'created_at' => $album->created_at,
-                'updated_at' => $album->updated_at,
-            ],
+            'album' => $album,
+            'image_path' => $imagePath,
+            'image_url' => $imageUrl,
         ];
 
         return response()->json($response);
     }
+
 
     /**
      * Show the form for editing the specified resource.
@@ -115,35 +127,38 @@ class AlbumController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $validator = Validator::make($request->all(), [
-            'image' => 'required|image|mimes:png,jpg,svg|max:10240',
-        ]);
+        $validator = $this->validateAlbum($request);
+        $image = $request->image;
 
         if ($validator->fails()) {
-            return response()->json(['message' => 'Image validation failed', 'errors' => $validator->errors()], 400);
+            return response()->json(
+                [
+                    'message' => 'Image validation failed',
+                    'errors' => $validator->errors()
+                ],
+                400
+            );
         }
 
         $album = Album::findOrFail($id);
 
-        if ($request->hasFile('image')) {
+        if ($image) {
             if ($album->image) {
-                $imagePath = public_path('upload/' . date('Y', strtotime($album->created_at)) . '/' . date('m', strtotime($album->created_at)) . '/' . date('d', strtotime($album->created_at)) . '/' . $album->image);
+                $imagePath = public_path($this->generateImagePath($album));
                 if (file_exists($imagePath)) {
                     unlink($imagePath);
                 }
             }
 
-            // $imageHash = substr(md5(uniqid()), 0, 2);
-            // $imageName = date('Ymd') . $imageHash . '.' . $request->file('image')->getClientOriginalExtension();
-            $imageName = date('Ymd') . '_' . Str::random(10) . '.' . $request->file('image')->getClientOriginalExtension();
+            $imageName = $this->generateImageName($image->extension());
 
-            $request->file('image')->move(public_path('upload/' . date('Y') . '/' . date('m') . '/' . date('d')), $imageName);
+            $image->move(public_path('upload/' . date('Y/m/d/')), $imageName);
             $album->image = $imageName;
         }
 
         $album->save();
-        $imagePath = $album->image ? 'upload/' . date('Y', strtotime($album->update_at)) . '/' . date('m', strtotime($album->update_at)) . '/' . date('d', strtotime($album->update_at)) . '/' . $album->image : null;
-        $imageUrl = $imagePath ? url($imagePath) : null;
+        $imagePath = $this->generateImagePath($album);
+        $imageUrl = url($imagePath);
 
         $response = [
             'message' => 'album updated successfully',
@@ -167,7 +182,7 @@ class AlbumController extends Controller
         $album = Album::findOrFail($id);
 
         if ($album->image) {
-            $imagePath = public_path('upload/' . date('Y', strtotime($album->created_at)) . '/' . date('m', strtotime($album->created_at)) . '/' . date('d', strtotime($album->created_at)) . '/' . $album->image);
+            $imagePath = $this->generateImagePath($album);
             if (file_exists($imagePath)) {
                 unlink($imagePath);
             }
@@ -175,6 +190,8 @@ class AlbumController extends Controller
 
         $album->delete();
 
-        return response()->json(['message' => 'album deleted successfully']);
+        return response()->json([
+            'message' => 'album deleted successfully'
+        ]);
     }
 }
